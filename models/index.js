@@ -1,12 +1,8 @@
-const { Sequelize } = require('sequelize');
-const path = require('path');
-require('dotenv').config(); // Adiciona suporte para variáveis de ambiente locais
+const { Sequelize, DataTypes } = require('sequelize');
 
 let sequelize;
 
-// Verifica se está em ambiente de produção (com a variável DATABASE_URL)
 if (process.env.DATABASE_URL) {
-    // Configuração para produção (Easypanel)
     sequelize = new Sequelize(process.env.DATABASE_URL, {
         dialect: 'postgres',
         protocol: 'postgres',
@@ -14,12 +10,12 @@ if (process.env.DATABASE_URL) {
         dialectOptions: {
             ssl: {
                 require: true,
-                rejectUnauthorized: false // Necessário para muitas plataformas de cloud
+                rejectUnauthorized: false
             }
         }
     });
 } else {
-    // Configuração para desenvolvimento local (SQLite)
+    // Fallback para SQLite para desenvolvimento local, se necessário
     sequelize = new Sequelize({
         dialect: 'sqlite',
         storage: path.join(__dirname, '../database/database.sqlite'),
@@ -27,37 +23,25 @@ if (process.env.DATABASE_URL) {
     });
 }
 
+const db = {};
 
-// --- O resto do ficheiro permanece exatamente igual ---
+// Carregar modelos
+db.Project = require('./Project')(sequelize, DataTypes);
+db.ApiSpec = require('./ApiSpec')(sequelize, DataTypes);
+db.ProjectVersion = require('./ProjectVersion')(sequelize, DataTypes);
+db.VersionAssociation = require('./VersionAssociation')(sequelize, DataTypes);
 
-try {
-    // Import models
-    const Project = require('./Project')(sequelize, Sequelize.DataTypes);
-    const ApiSpec = require('./ApiSpec')(sequelize, Sequelize.DataTypes);
-    const ProjectVersion = require('./ProjectVersion')(sequelize, Sequelize.DataTypes);
-    const VersionAssociation = require('./VersionAssociation')(sequelize, Sequelize.DataTypes);
+// Definir associações
+db.Project.hasMany(db.ProjectVersion, { onDelete: 'CASCADE' });
+db.ProjectVersion.belongsTo(db.Project);
 
-    // Define relationships
-    Project.hasMany(ProjectVersion, { onDelete: 'CASCADE' });
-    ProjectVersion.belongsTo(Project);
+db.ProjectVersion.hasMany(db.VersionAssociation, { onDelete: 'CASCADE' });
+db.VersionAssociation.belongsTo(db.ProjectVersion);
 
-    ProjectVersion.hasMany(VersionAssociation, { onDelete: 'CASCADE' });
-    VersionAssociation.belongsTo(ProjectVersion);
+db.ApiSpec.hasMany(db.VersionAssociation, { onDelete: 'CASCADE' });
+db.VersionAssociation.belongsTo(db.ApiSpec);
 
-    ApiSpec.hasMany(VersionAssociation, { onDelete: 'CASCADE' });
-    VersionAssociation.belongsTo(ApiSpec);
+db.sequelize = sequelize;
+db.Sequelize = Sequelize;
 
-    const db = {
-        sequelize,
-        Project,
-        ApiSpec,
-        ProjectVersion,
-        VersionAssociation
-    };
-    
-    module.exports = db;
-
-} catch (error) {
-    console.error('--- [ERRO FATAL] Ocorreu um erro ao carregar os modelos da base de dados:', error);
-    process.exit(1); 
-}
+module.exports = db;
