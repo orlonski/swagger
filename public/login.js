@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loginForm = document.getElementById('login-form');
     const errorMessage = document.getElementById('error-message');
 
-    // Verificar se o utilizador já está logado
+    // Verificar se o usuario já está logado
     fetch('/api/auth/status')
         .then(res => res.json())
         .then(data => {
@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (response.ok) {
                 window.location.href = '/';
             } else {
-                errorMessage.textContent = 'Utilizador ou password inválidos.';
+                errorMessage.textContent = 'Usuario ou senha inválidos.';
             }
         } catch (error) {
             errorMessage.textContent = 'Erro de rede. Tente novamente.';

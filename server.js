@@ -35,7 +35,7 @@ passport.use('custom', new CustomStrategy(
   async (req, done) => {
     const { username, password } = req.body;
     if (!username || !password) {
-      return done(null, false, { message: 'Utilizador e password são obrigatórios.' });
+      return done(null, false, { message: 'User e password são obrigatórios.' });
     }
     try {
       const externalApiUrl = 'https://portal.kmm.com.br/_remote/gateway.php';
@@ -95,9 +95,9 @@ app.use('/api', isAuthenticated, apiRoutes);
 // --- Arranque do Servidor ---
 sequelize.sync().then(() => {
     app.listen(PORT, () => {
-        console.log(`Servidor a funcionar na porta ${PORT}`);
+        console.log(`Servidor rodando na porta ${PORT}`);
     });
 }).catch(err => {
-    console.error('Não foi possível ligar à base de dados:', err);
+    console.error('Não foi possível conectar à base de dados:', err);
 });
 

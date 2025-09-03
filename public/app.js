@@ -277,7 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Ações Globais
             if (action === 'logout') {
-                disableButton('A sair...');
+                disableButton('Saindo...');
                 await fetch('/api/auth/logout', { method: 'POST' });
                 window.location.href = '/login.html';
                 return;
