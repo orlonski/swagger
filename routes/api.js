@@ -1,7 +1,19 @@
 const express = require('express');
 const yaml = require('js-yaml');
-const { Project, ApiSpec, ProjectVersion, VersionAssociation } = require('../models');
+const { sequelize, Project, ApiSpec, ProjectVersion, VersionAssociation } = require('../models');
 const router = express.Router();
+
+// --- Funções Auxiliares ---
+function findRefsRecursively(obj, refsSet) {
+    if (!obj || typeof obj !== 'object') return;
+    for (const key in obj) {
+        if (key === '$ref' && typeof obj[key] === 'string') {
+            refsSet.add(obj[key]);
+        } else {
+            findRefsRecursively(obj[key], refsSet);
+        }
+    }
+}
 
 // --- Rotas de Projetos ---
 router.get('/projects', async (req, res) => {
@@ -118,9 +130,24 @@ router.get('/specs/:id/endpoints', async (req, res) => {
 // --- Rotas de Versões de Projeto ---
 router.get('/projects/:projectId/versions', async (req, res) => {
     try {
-        const versions = await ProjectVersion.findAll({ where: { ProjectId: req.params.projectId }, order: [['name', 'ASC']] });
+        // CORREÇÃO: A query agora inclui a contagem de endpoints associados
+        const versions = await ProjectVersion.findAll({
+            where: { ProjectId: req.params.projectId },
+            attributes: {
+                include: [
+                    [sequelize.fn("COUNT", sequelize.col("VersionAssociations.id")), "endpointCount"]
+                ]
+            },
+            include: [{
+                model: VersionAssociation,
+                attributes: []
+            }],
+            group: ['ProjectVersion.id'],
+            order: [['name', 'ASC']]
+        });
         res.json(versions);
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Erro ao carregar versões.' });
     }
 });

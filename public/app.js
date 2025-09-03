@@ -40,16 +40,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const navProjects = document.getElementById('nav-projects');
         const navApiSpecs = document.getElementById('nav-api-specs');
 
-        // --- Roteador Principal (Lógica de Navegação Corrigida) ---
         const navigate = (page, payload = {}) => {
-            // Atualiza o estado com base no payload da navegação
             if (page === 'manage_versions' && payload.project) {
                 state.currentProject = payload.project;
             }
             if (page === 'manage_associations' && payload.version) {
                 state.currentVersion = payload.version;
             }
-
             state.currentPage = page;
             updateNavStyles();
             render();
@@ -70,7 +67,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        // --- Renderizadores de Página (Completos) ---
         const renderProjectsPage = async () => {
             pageContainer.innerHTML = `
                 <div class="page-header">
@@ -144,7 +140,6 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadDataForAssociationPage();
         };
 
-        // --- Componente de Loading ---
         const getLoadingIndicator = (text = '') => `
             <div class="flex justify-center items-center p-8">
                 <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
@@ -154,7 +149,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const getButtonLoadingIndicator = (text) => `<div class="flex items-center justify-center"><svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>${text}</span></div>`;
 
-        // --- Carregadores de Dados (Completos) ---
         async function loadProjects() {
             const projectsList = document.getElementById('projects-list');
             projectsList.innerHTML = getLoadingIndicator();
@@ -212,14 +206,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     versionsList.innerHTML = `<div class="text-center text-gray-500 p-4">Nenhuma versão encontrada para este projeto.</div>`;
                     return;
                 }
-                versionsList.innerHTML = versions.map(v => `
+                versionsList.innerHTML = versions.map(v => {
+                    const count = parseInt(v.endpointCount, 10);
+                    const endpointText = count === 1 ? 'endpoint' : 'endpoints';
+                    return `
                     <div class="version-item">
-                        <span class="font-bold text-lg">${v.name}</span>
+                        <div class="flex items-center">
+                            <span class="font-bold text-lg">${v.name}</span>
+                            <span class="ml-4 text-sm font-medium bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">${count} ${endpointText}</span>
+                        </div>
                         <div class="space-x-2">
                             <button class="btn btn-secondary btn-sm" data-action="manage-associations" data-version-id="${v.id}" data-version-name="${v.name}">Gerir Endpoints</button>
                             <button class="btn btn-danger btn-sm" data-action="delete-version" data-version-id="${v.id}">Apagar</button>
                         </div>
-                    </div>`).join('');
+                    </div>`
+                }).join('');
             } catch (error) { versionsList.innerHTML = `<div class="error-banner">${error.message}</div>`; }
         }
         async function loadDataForAssociationPage() {
@@ -237,7 +238,6 @@ document.addEventListener('DOMContentLoaded', () => {
             specsListContainer.innerHTML = specs.map(spec => `<div class="p-3 border rounded-lg cursor-pointer hover:bg-indigo-50 hover:border-indigo-300" data-action="select-spec-for-assoc" data-spec-id="${spec.id}">${spec.name}</div>`).join('');
         }
 
-        // --- Funções da Janela Modal (Completas) ---
         async function openSpecEditorModal(spec = null) {
             const newApiTemplate = 'openapi: 3.0.0\ninfo:\n  title: Nova API\n  version: 1.0.0\npaths:\n';
             specEditorModal.classList.remove('hidden');
@@ -259,7 +259,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         function closeSpecEditorModal() { specEditorModal.classList.add('hidden'); }
 
-        // --- Manipulador de Eventos Central ---
         document.body.addEventListener('click', async (e) => {
             const target = e.target.closest('[data-action]');
             if (!target) return;
@@ -275,9 +274,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 target.innerHTML = originalButtonText;
             };
 
-            // Ações Globais
             if (action === 'logout') {
-                disableButton('Saindo...');
+                disableButton('A sair...');
                 await fetch('/api/auth/logout', { method: 'POST' });
                 window.location.href = '/login.html';
                 return;
@@ -285,7 +283,6 @@ document.addEventListener('DOMContentLoaded', () => {
              if (action === 'navigate-projects') { navigate('projects'); return; }
             if (action === 'navigate-api-specs') { navigate('api_specs'); return; }
 
-            // Ações da Janela Modal
             if (action === 'close-spec-modal') { closeSpecEditorModal(); return; }
             if (action === 'save-spec') {
                 disableButton('Salvando...');
@@ -304,7 +301,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Ações de Página
             if (action === 'show-add-project-form') { document.getElementById('add-project-form').classList.remove('hidden'); }
             if (action === 'cancel-add-project') { document.getElementById('add-project-form').classList.add('hidden'); }
             if (action === 'save-new-project') {
@@ -333,8 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (action === 'cancel-edit-project') { renderProjectsPage(); }
             if (action === 'manage-versions') {
-                const project = { id: target.dataset.projectId, name: target.dataset.projectName };
-                navigate('manage_versions', { project });
+                navigate('manage_versions', { project: { id: target.dataset.projectId, name: target.dataset.projectName } });
             }
             if (action === 'show-add-spec-form') { openSpecEditorModal(); }
             if (action === 'edit-spec') {
@@ -359,10 +354,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (confirm('Tem a certeza?')) { target.closest('.version-item').style.opacity = '0.5'; await fetch(`/api/versions/${target.dataset.versionId}`, { method: 'DELETE' }); renderManageVersionsPage(); }
             }
             if (action === 'manage-associations') {
-                const version = { id: target.dataset.versionId, name: target.dataset.versionName };
-                navigate('manage_associations', { version });
+                navigate('manage_associations', { version: { id: target.dataset.versionId, name: target.dataset.versionName } });
             }
-            if (action === 'back-to-versions') { navigate('manage_versions'); }
+            if (action === 'back-to-versions') { navigate('manage_versions', { project: state.currentProject }); }
             if (action === 'select-spec-for-assoc') {
                 document.querySelectorAll('#assoc-specs-list > div.bg-indigo-100').forEach(el => el.classList.remove('bg-indigo-100', 'border-indigo-400'));
                 target.classList.add('bg-indigo-100', 'border-indigo-400');
@@ -392,15 +386,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 await fetch(`/api/versions/${state.currentVersion.id}/associations`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ associations }) });
                 alert('Associações salvas com sucesso!');
-                navigate('manage_versions');
+                navigate('manage_versions', { project: state.currentProject });
             }
         });
         
-        // Inicia a aplicação mostrando a página de projetos
         navigate('projects');
     }
 
-    // Ponto de entrada da aplicação
     checkAuthAndInitialize();
 });
 
