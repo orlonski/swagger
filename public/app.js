@@ -5,6 +5,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const specEditorModal = document.getElementById('spec-editor-modal');
     const toastContainer = document.getElementById('toast-container');
     const confirmModal = document.getElementById('confirm-modal');
+    
+    // Verificar se elementos existem
+    if (!pageContainer) {
+        console.error('Elemento page-container não encontrado');
+        return;
+    }
 
     // Estado da aplicação
     let state = {
@@ -16,6 +22,39 @@ document.addEventListener('DOMContentLoaded', () => {
         user: null,
         pendingAssociations: new Set()
     };
+
+    // --- Função de Navegação (definida primeiro) ---
+    function navigate(page, data = {}) {
+        console.log('Navigate called with page:', page);
+        state.currentPage = page;
+        if (data.project) state.currentProject = data.project;
+        if (data.version) state.currentVersion = data.version;
+        
+        if (page === 'projects') {
+            console.log('Calling renderProjectsPage');
+            renderProjectsPage();
+        } else if (page === 'api_specs') {
+            console.log('Calling renderApiSpecsPage');
+            renderApiSpecsPage();
+        } else if (page === 'dashboard') {
+            console.log('Calling renderDashboardPage');
+            renderDashboardPage();
+        } else if (page === 'manage_versions') {
+            console.log('Calling renderManageVersionsPage');
+            renderManageVersionsPage();
+        } else if (page === 'manage_associations') {
+            console.log('Calling renderManageAssociationsPage');
+            renderManageAssociationsPage();
+        }
+    }
+
+    // --- Função para atualizar navegação ativa ---
+    function updateActiveNavigation(page) {
+        document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+        if (page === 'projects') document.getElementById('nav-projects').classList.add('active');
+        if (page === 'api_specs') document.getElementById('nav-api-specs').classList.add('active');
+        if (page === 'dashboard') document.getElementById('nav-dashboard').classList.add('active');
+    }
 
     // --- Verificação de Autenticação e Ponto de Entrada ---
     async function checkAuthAndInitialize() {
@@ -562,11 +601,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (action === 'logout') {
                 disableButton('A sair...');
                 await fetch('/api/auth/logout', { method: 'POST' });
-                window.location.href = '/login.html';
+                window.location.href = '/login';
                 return;
             }
              if (action === 'navigate-projects') { navigate('projects'); return; }
             if (action === 'navigate-api-specs') { navigate('api_specs'); return; }
+            if (action === 'navigate-dashboard') { 
+                console.log('Dashboard clicked - calling renderDashboardPage directly');
+                renderDashboardPage();
+                return; 
+            }
 
             if (action === 'close-spec-modal') { closeSpecEditorModal(); return; }
             if (action === 'save-spec') {
@@ -696,6 +740,477 @@ document.addEventListener('DOMContentLoaded', () => {
         
         navigate('projects');
     }
+
+    // --- Dashboard Cliente-Módulo Versões ---
+    async function renderDashboardPage() {
+        console.log('renderDashboardPage called');
+        updateActiveNavigation('dashboard');
+        
+        const loadingSpinner = `
+            <div class="flex justify-center items-center p-8">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            </div>
+        `;
+        
+        pageContainer.innerHTML = `
+            <div class="space-y-6">
+                <div class="page-header">
+                    <h2 class="text-2xl font-bold text-gray-800">Dashboard de Versões Cliente-Módulo</h2>
+                    <div class="flex space-x-6">
+                        <div class="relative">
+                            <button id="client-filter-btn" class="flex items-center justify-between px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[200px]">
+                                <span id="client-filter-text">Selecionar Clientes</span>
+                                <svg class="w-5 h-5 ml-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <div id="client-filter-dropdown" class="hidden absolute top-full left-0 mt-1 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+                                <div class="p-3 border-b border-gray-200">
+                                    <input type="text" id="client-search-input" placeholder="Buscar clientes..." class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                                <div id="client-options" class="p-2">
+                                    <!-- Options will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="relative">
+                            <button id="module-filter-btn" class="flex items-center justify-between px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[200px]">
+                                <span id="module-filter-text">Selecionar Módulos</span>
+                                <svg class="w-5 h-5 ml-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <div id="module-filter-dropdown" class="hidden absolute top-full left-0 mt-1 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+                                <div class="p-3 border-b border-gray-200">
+                                    <input type="text" id="module-search-input" placeholder="Buscar módulos..." class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                                <div id="module-options" class="p-2">
+                                    <!-- Options will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button id="clear-filters-btn" class="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                            Limpar Filtros
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="dashboard-stats" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    ${loadingSpinner}
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                    <div class="p-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
+                        <h3 class="text-lg font-semibold">Matriz de Versões</h3>
+                        <p class="text-indigo-100">Visualização interativa das versões por cliente e módulo</p>
+                    </div>
+                    <div id="version-matrix" class="p-4">
+                        ${loadingSpinner}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        await loadDashboardData();
+    }
+    
+    async function loadDashboardData() {
+        try {
+            const response = await fetch('/api/client-module-dashboard');
+            const data = await response.json();
+            
+            renderDashboardStats(data.stats);
+            renderVersionMatrix(data.clients, data.modules, data.versions);
+            setupDashboardFilters(data.clients, data.modules, data.versions);
+            
+        } catch (error) {
+            console.error('Erro ao carregar dashboard:', error);
+            showToast('Erro ao carregar dashboard', 'error');
+        }
+    }
+    
+    function renderDashboardStats(stats) {
+        document.getElementById('dashboard-stats').innerHTML = `
+            <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-4 rounded-lg cursor-help relative group">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-blue-100 text-sm">Total Clientes</p>
+                        <p class="text-2xl font-bold">${stats.TOTAL_CLIENTES || 0}</p>
+                    </div>
+                    <div class="text-blue-200">
+                        <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                    Quantidade de clientes ativos no sistema
+                    <div class="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                </div>
+            </div>
+            
+            <div class="bg-gradient-to-br from-green-500 to-green-600 text-white p-4 rounded-lg cursor-help relative group">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-green-100 text-sm">Total Módulos</p>
+                        <p class="text-2xl font-bold">${stats.TOTAL_MODULOS || 0}</p>
+                    </div>
+                    <div class="text-green-200">
+                        <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                    Quantidade total de módulos disponíveis
+                    <div class="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                </div>
+            </div>
+            
+            <div class="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-4 rounded-lg cursor-help relative group">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-purple-100 text-sm">Combinações Cliente-Módulo</p>
+                        <p class="text-2xl font-bold">${stats.TOTAL_INSTALACOES || 0}</p>
+                        <p class="text-purple-200 text-xs mt-1">Total de módulos instalados em clientes</p>
+                    </div>
+                    <div class="text-purple-200">
+                        <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none w-64 text-center z-50">
+                    Cada célula preenchida na matriz representa uma combinação cliente-módulo. Indica quantos módulos estão efetivamente instalados nos clientes.
+                    <div class="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                </div>
+            </div>
+            
+            <div class="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-4 rounded-lg cursor-help relative group">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-orange-100 text-sm">Versões Diferentes</p>
+                        <p class="text-2xl font-bold">${stats.TOTAL_VERSOES || 0}</p>
+                        <p class="text-orange-200 text-xs mt-1">Quantidade de versões distintas em uso</p>
+                    </div>
+                    <div class="text-orange-200">
+                        <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none w-64 text-center z-50">
+                    Quantas versões distintas existem em todo o sistema. Muitas versões = maior complexidade de suporte.
+                    <div class="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                </div>
+            </div>
+        `;
+    }
+    
+    function renderVersionMatrix(clients, modules, versions) {
+        // Limitar dados para melhor performance
+        const maxClients = 50;
+        const maxModules = 20;
+        
+        const limitedClients = clients.slice(0, maxClients);
+        const limitedModules = modules.slice(0, maxModules);
+        
+        // Criar mapa de versões para acesso rápido
+        const versionMap = new Map();
+        versions.forEach(v => {
+            const key = `${v.CLIENTE_ID}-${v.COD_MODULO}`;
+            versionMap.set(key, v.VERSAO);
+        });
+        
+        // Gerar cores para versões (cache)
+        const allVersions = [...new Set(versions.map(v => v.VERSAO))];
+        const versionColors = new Map();
+        allVersions.forEach((version, index) => {
+            const hue = (index * 137.5) % 360;
+            versionColors.set(version, `hsl(${hue}, 70%, 85%)`);
+        });
+        
+        // Usar DocumentFragment para melhor performance
+        const container = document.getElementById('version-matrix');
+        
+        // Mostrar aviso se dados foram limitados
+        let warningHTML = '';
+        if (clients.length > maxClients || modules.length > maxModules) {
+            warningHTML = `
+                <div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <div class="flex items-center">
+                        <svg class="w-5 h-5 text-yellow-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                        </svg>
+                        <span class="text-sm text-yellow-800">
+                            <strong>Performance:</strong> Mostrando apenas ${limitedClients.length} de ${clients.length} clientes e ${limitedModules.length} de ${modules.length} módulos. Use os filtros para refinar a visualização.
+                        </span>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Construir HTML de forma mais eficiente
+        const headerCells = limitedModules.map(module => 
+            `<th class="px-3 py-2 text-center text-xs font-medium text-gray-700 uppercase min-w-[120px] bg-gray-100 border-r border-gray-200" title="${module.DESCRICAO}">
+                <div class="whitespace-nowrap">
+                    <div>${module.NOME}</div>
+                    ${module.VERSAO ? `<div class="text-xs text-gray-500 font-normal normal-case mt-1">v${module.VERSAO}</div>` : ''}
+                </div>
+            </th>`
+        ).join('');
+        
+        const bodyRows = limitedClients.map((client, clientIndex) => {
+            const rowClass = clientIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+            const cells = limitedModules.map(module => {
+                const key = `${client.CLIENTE_ID}-${module.COD_MODULO}`;
+                const version = versionMap.get(key);
+                
+                if (version) {
+                    const bgColor = versionColors.get(version);
+                    return `<td class="px-2 py-2 text-center text-sm border-r border-gray-100" style="background-color: ${bgColor}"><span class="inline-block px-2 py-1 rounded text-xs font-medium bg-white bg-opacity-80 text-gray-800">${version}</span></td>`;
+                } else {
+                    return `<td class="px-2 py-2 text-center text-sm bg-gray-50 border-r border-gray-100"><span class="text-gray-400 text-xs">—</span></td>`;
+                }
+            }).join('');
+            
+            return `<tr class="${rowClass} hover:bg-blue-50 border-b border-gray-100"><td class="px-4 py-2 text-sm font-medium text-gray-900 sticky left-0 ${rowClass} z-20 border-r-2 border-gray-300 shadow-sm"><div class="whitespace-nowrap font-semibold">${client.NOME}</div></td>${cells}</tr>`;
+        }).join('');
+        
+        container.innerHTML = `
+            ${warningHTML}
+            <div class="overflow-auto max-h-[500px] border border-gray-200 rounded-lg">
+                <table class="min-w-full relative">
+                    <thead class="sticky top-0 z-20">
+                        <tr class="bg-gray-100 border-b-2 border-gray-300">
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase sticky left-0 bg-gray-100 z-30 border-r-2 border-gray-300 shadow-md">Cliente</th>
+                            ${headerCells}
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white">
+                        ${bodyRows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+    
+    function setupDashboardFilters(clients, modules, versions) {
+        let selectedClients = new Set(clients.map(c => c.CLIENTE_ID));
+        let selectedModules = new Set(modules.map(m => m.COD_MODULO));
+        
+        // Populate client options
+        function populateClientOptions(searchTerm = '') {
+            const filteredClients = clients.filter(c => 
+                c.NOME.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+            
+            const clientOptions = document.getElementById('client-options');
+            clientOptions.innerHTML = `
+                <div class="mb-2">
+                    <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                        <input type="checkbox" id="select-all-clients" class="mr-3 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                        <span class="font-medium text-sm text-gray-700">Selecionar Todos</span>
+                    </label>
+                </div>
+                <div class="border-t border-gray-200 pt-2">
+                    ${filteredClients.map(client => `
+                        <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                            <input type="checkbox" value="${client.CLIENTE_ID}" class="client-checkbox mr-3 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" ${selectedClients.has(client.CLIENTE_ID) ? 'checked' : ''}>
+                            <span class="text-sm text-gray-700">${client.NOME}</span>
+                        </label>
+                    `).join('')}
+                </div>
+            `;
+            
+            // Update select all checkbox
+            const selectAllClients = document.getElementById('select-all-clients');
+            const clientCheckboxes = document.querySelectorAll('.client-checkbox');
+            selectAllClients.checked = clientCheckboxes.length > 0 && Array.from(clientCheckboxes).every(cb => cb.checked);
+            selectAllClients.indeterminate = Array.from(clientCheckboxes).some(cb => cb.checked) && !selectAllClients.checked;
+        }
+        
+        // Populate module options
+        function populateModuleOptions(searchTerm = '') {
+            const filteredModules = modules.filter(m => 
+                m.NOME.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+            
+            const moduleOptions = document.getElementById('module-options');
+            moduleOptions.innerHTML = `
+                <div class="mb-2">
+                    <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                        <input type="checkbox" id="select-all-modules" class="mr-3 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                        <span class="font-medium text-sm text-gray-700">Selecionar Todos</span>
+                    </label>
+                </div>
+                <div class="border-t border-gray-200 pt-2">
+                    ${filteredModules.map(module => `
+                        <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                            <input type="checkbox" value="${module.COD_MODULO}" class="module-checkbox mr-3 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" ${selectedModules.has(module.COD_MODULO) ? 'checked' : ''}>
+                            <span class="text-sm text-gray-700">${module.NOME}</span>
+                        </label>
+                    `).join('')}
+                </div>
+            `;
+            
+            // Update select all checkbox
+            const selectAllModules = document.getElementById('select-all-modules');
+            const moduleCheckboxes = document.querySelectorAll('.module-checkbox');
+            selectAllModules.checked = moduleCheckboxes.length > 0 && Array.from(moduleCheckboxes).every(cb => cb.checked);
+            selectAllModules.indeterminate = Array.from(moduleCheckboxes).some(cb => cb.checked) && !selectAllModules.checked;
+        }
+        
+        // Update filter text
+        function updateFilterText() {
+            const clientText = document.getElementById('client-filter-text');
+            const moduleText = document.getElementById('module-filter-text');
+            
+            if (selectedClients.size === clients.length) {
+                clientText.textContent = 'Todos os Clientes';
+            } else if (selectedClients.size === 0) {
+                clientText.textContent = 'Nenhum Cliente';
+            } else {
+                clientText.textContent = `${selectedClients.size} Cliente(s)`;
+            }
+            
+            if (selectedModules.size === modules.length) {
+                moduleText.textContent = 'Todos os Módulos';
+            } else if (selectedModules.size === 0) {
+                moduleText.textContent = 'Nenhum Módulo';
+            } else {
+                moduleText.textContent = `${selectedModules.size} Módulo(s)`;
+            }
+        }
+        
+        // Apply filters
+        function applyFilters() {
+            const filteredClients = clients.filter(c => selectedClients.has(c.CLIENTE_ID));
+            const filteredModules = modules.filter(m => selectedModules.has(m.COD_MODULO));
+            renderVersionMatrix(filteredClients, filteredModules, versions);
+        }
+        
+        // Initialize
+        populateClientOptions();
+        populateModuleOptions();
+        updateFilterText();
+        
+        // Event listeners
+        document.getElementById('client-filter-btn').addEventListener('click', () => {
+            const dropdown = document.getElementById('client-filter-dropdown');
+            dropdown.classList.toggle('hidden');
+            document.getElementById('module-filter-dropdown').classList.add('hidden');
+        });
+        
+        document.getElementById('module-filter-btn').addEventListener('click', () => {
+            const dropdown = document.getElementById('module-filter-dropdown');
+            dropdown.classList.toggle('hidden');
+            document.getElementById('client-filter-dropdown').classList.add('hidden');
+        });
+        
+        document.getElementById('client-search-input').addEventListener('input', (e) => {
+            populateClientOptions(e.target.value);
+        });
+        
+        document.getElementById('module-search-input').addEventListener('input', (e) => {
+            populateModuleOptions(e.target.value);
+        });
+        
+        document.getElementById('clear-filters-btn').addEventListener('click', () => {
+            selectedClients = new Set(clients.map(c => c.CLIENTE_ID));
+            selectedModules = new Set(modules.map(m => m.COD_MODULO));
+            populateClientOptions();
+            populateModuleOptions();
+            updateFilterText();
+            applyFilters();
+        });
+        
+        // Debounce function for performance
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+        
+        const debouncedApplyFilters = debounce(() => {
+            updateFilterText();
+            applyFilters();
+        }, 150);
+        
+        // Handle checkbox changes
+        document.addEventListener('change', (e) => {
+            if (e.target.classList.contains('client-checkbox')) {
+                const clientId = parseInt(e.target.value);
+                if (e.target.checked) {
+                    selectedClients.add(clientId);
+                } else {
+                    selectedClients.delete(clientId);
+                }
+                debouncedApplyFilters();
+                populateClientOptions(document.getElementById('client-search-input').value);
+            }
+            
+            if (e.target.classList.contains('module-checkbox')) {
+                const moduleCode = e.target.value;
+                if (e.target.checked) {
+                    selectedModules.add(moduleCode);
+                } else {
+                    selectedModules.delete(moduleCode);
+                }
+                debouncedApplyFilters();
+                populateModuleOptions(document.getElementById('module-search-input').value);
+            }
+            
+            if (e.target.id === 'select-all-clients') {
+                const clientCheckboxes = document.querySelectorAll('.client-checkbox');
+                clientCheckboxes.forEach(cb => {
+                    cb.checked = e.target.checked;
+                    const clientId = parseInt(cb.value);
+                    if (e.target.checked) {
+                        selectedClients.add(clientId);
+                    } else {
+                        selectedClients.delete(clientId);
+                    }
+                });
+                updateFilterText();
+                applyFilters();
+            }
+            
+            if (e.target.id === 'select-all-modules') {
+                const moduleCheckboxes = document.querySelectorAll('.module-checkbox');
+                moduleCheckboxes.forEach(cb => {
+                    cb.checked = e.target.checked;
+                    const moduleCode = cb.value;
+                    if (e.target.checked) {
+                        selectedModules.add(moduleCode);
+                    } else {
+                        selectedModules.delete(moduleCode);
+                    }
+                });
+                updateFilterText();
+                applyFilters();
+            }
+        });
+        
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#client-filter-btn') && !e.target.closest('#client-filter-dropdown')) {
+                document.getElementById('client-filter-dropdown').classList.add('hidden');
+            }
+            if (!e.target.closest('#module-filter-btn') && !e.target.closest('#module-filter-dropdown')) {
+                document.getElementById('module-filter-dropdown').classList.add('hidden');
+            }
+        });
+    }
+    
 
     // Interceptar respostas 401 globalmente
     const originalFetch = window.fetch;

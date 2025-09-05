@@ -15,6 +15,64 @@ function findRefsRecursively(obj, refsSet) {
     }
 }
 
+// --- Dashboard Cliente-Módulo Versões ---
+router.get('/client-module-dashboard', async (req, res) => {
+    try {
+        // Buscar todos os clientes ativos
+        const [clients] = await sequelize.query(`
+            SELECT cliente_id, nome
+            FROM kmm.v$cliente_versionador 
+            WHERE ativo = 1 AND padrao = 1
+            ORDER BY nome
+        `);
+
+        // Buscar todos os módulos
+        const [modules] = await sequelize.query(`
+            SELECT cod_modulo, nome, descricao, versao
+            FROM kmm.modulo
+            ORDER BY nome
+        `);
+
+        // Buscar matriz de versões cliente x módulo
+        const [versions] = await sequelize.query(`
+            SELECT 
+                cmv.cliente_id,
+                cmv.cod_modulo,
+                cmv.versao,
+                c.nome as cliente_nome,
+                m.nome as modulo_nome,
+                m.descricao as modulo_descricao
+            FROM kmm.v$cliente_modulo_versao cmv
+            INNER JOIN kmm.v$cliente_versionador c ON cmv.cliente_id = c.cliente_id
+            INNER JOIN kmm.modulo m ON cmv.cod_modulo = m.cod_modulo
+            WHERE c.ativo = 1 AND c.padrao = 1
+            ORDER BY c.nome, m.nome
+        `);
+
+        // Buscar estatísticas
+        const [stats] = await sequelize.query(`
+            SELECT 
+                COUNT(DISTINCT cmv.cliente_id) as total_clientes,
+                COUNT(DISTINCT cmv.cod_modulo) as total_modulos,
+                COUNT(*) as total_instalacoes,
+                COUNT(DISTINCT cmv.versao) as total_versoes
+            FROM kmm.v$cliente_modulo_versao cmv
+            INNER JOIN kmm.v$cliente_versionador c ON cmv.cliente_id = c.cliente_id
+            WHERE c.ativo = 1 AND c.padrao = 1
+        `);
+
+        res.json({
+            clients,
+            modules,
+            versions,
+            stats: stats[0]
+        });
+    } catch (error) {
+        console.error('Erro ao buscar dashboard cliente-módulo:', error);
+        res.status(500).json({ error: 'Erro interno do servidor' });
+    }
+});
+
 // --- Rotas de Projetos ---
 router.get('/projects', async (req, res) => {
     try {
