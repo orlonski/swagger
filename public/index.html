@@ -58,6 +58,24 @@
         #swagger-editor-container { flex-grow: 1; border: 1px solid var(--border-color); border-radius: 0.5rem; min-height: 0; position: relative; }
         #swagger-editor-container .swagger-editor { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         #swagger-editor-container .swagger-editor .swagger-ui { height: 100% !important; overflow-y: auto !important; }
+        
+        /* Toast Notifications */
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
+        .toast { padding: 16px 20px; border-radius: 8px; color: white; font-weight: 600; box-shadow: 0 10px 25px rgba(0,0,0,0.2); transform: translateX(400px); opacity: 0; transition: all 0.3s ease; max-width: 400px; }
+        .toast.show { transform: translateX(0); opacity: 1; }
+        .toast.success { background: linear-gradient(135deg, #10b981, #059669); }
+        .toast.error { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .toast.warning { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .toast.info { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+        
+        /* Custom Confirm Modal */
+        .confirm-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1001; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: all 0.3s ease; }
+        .confirm-modal.show { opacity: 1; visibility: visible; }
+        .confirm-content { background: white; border-radius: 12px; padding: 24px; max-width: 400px; width: 90%; box-shadow: 0 20px 40px rgba(0,0,0,0.3); transform: scale(0.9); transition: transform 0.3s ease; }
+        .confirm-modal.show .confirm-content { transform: scale(1); }
+        .confirm-title { font-size: 18px; font-weight: 700; color: #1f2937; margin-bottom: 12px; }
+        .confirm-message { color: #6b7280; margin-bottom: 20px; line-height: 1.5; }
+        .confirm-buttons { display: flex; gap: 12px; justify-content: flex-end; }
     </style>
 </head>
 <body>
@@ -95,6 +113,21 @@
             <div class="modal-footer space-x-2">
                 <button data-action="close-spec-modal" class="btn btn-secondary">Fechar</button>
                 <button data-action="save-spec" class="btn btn-success">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Confirm Modal -->
+    <div id="confirm-modal" class="confirm-modal">
+        <div class="confirm-content">
+            <div id="confirm-title" class="confirm-title"></div>
+            <div id="confirm-message" class="confirm-message"></div>
+            <div class="confirm-buttons">
+                <button id="confirm-cancel" class="btn btn-secondary">Cancelar</button>
+                <button id="confirm-ok" class="btn btn-danger">Confirmar</button>
             </div>
         </div>
     </div>

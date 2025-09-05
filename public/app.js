@@ -3,6 +3,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const pageContainer = document.getElementById('page-container');
     const userMenu = document.getElementById('user-menu');
     const specEditorModal = document.getElementById('spec-editor-modal');
+    const toastContainer = document.getElementById('toast-container');
+    const confirmModal = document.getElementById('confirm-modal');
 
     // Estado da aplicação
     let state = {
@@ -33,6 +35,60 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error("Erro de autenticação, a redirecionar para o login:", error);
             window.location.href = '/login.html';
         }
+    }
+
+    // --- Sistema de Notificações ---
+    function showToast(message, type = 'success', duration = 4000) {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        
+        toastContainer.appendChild(toast);
+        
+        // Trigger animation
+        setTimeout(() => toast.classList.add('show'), 100);
+        
+        // Auto remove
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
+    }
+
+    function showConfirm(title, message, onConfirm, onCancel = null) {
+        document.getElementById('confirm-title').textContent = title;
+        document.getElementById('confirm-message').textContent = message;
+        
+        const confirmOk = document.getElementById('confirm-ok');
+        const confirmCancel = document.getElementById('confirm-cancel');
+        
+        // Remove existing listeners
+        const newConfirmOk = confirmOk.cloneNode(true);
+        const newConfirmCancel = confirmCancel.cloneNode(true);
+        confirmOk.parentNode.replaceChild(newConfirmOk, confirmOk);
+        confirmCancel.parentNode.replaceChild(newConfirmCancel, confirmCancel);
+        
+        // Add new listeners
+        newConfirmOk.addEventListener('click', () => {
+            confirmModal.classList.remove('show');
+            if (onConfirm) onConfirm();
+        });
+        
+        newConfirmCancel.addEventListener('click', () => {
+            confirmModal.classList.remove('show');
+            if (onCancel) onCancel();
+        });
+        
+        // Show modal
+        confirmModal.classList.add('show');
+        
+        // Close on backdrop click
+        confirmModal.addEventListener('click', (e) => {
+            if (e.target === confirmModal) {
+                confirmModal.classList.remove('show');
+                if (onCancel) onCancel();
+            }
+        });
     }
     
     // --- Função de Inicialização da Aplicação Principal ---
@@ -484,10 +540,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     const url = state.editingSpecId ? `/api/specs/${state.editingSpecId}` : '/api/specs';
                     const method = state.editingSpecId ? 'PUT' : 'POST';
                     await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, yaml }) });
+                    const successMessage = state.editingSpecId ? 'Ficheiro YAML atualizado com sucesso!' : 'Ficheiro YAML criado com sucesso!';
+                    showToast(successMessage, 'success');
+                    enableButton();
                     closeSpecEditorModal();
                     if (state.currentPage === 'api_specs') renderApiSpecsPage();
                 } else {
-                    alert('Nome e conteúdo YAML são obrigatórios.');
+                    showToast('Nome e conteúdo YAML são obrigatórios.', 'error');
                     enableButton();
                 }
                 return;
@@ -502,7 +561,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 else { enableButton(); }
             }
             if (action === 'delete-project') {
-                if (confirm('Tem a certeza?')) { target.closest('.project-item').style.opacity = '0.5'; await fetch(`/api/projects/${target.dataset.projectId}`, { method: 'DELETE' }); renderProjectsPage(); }
+                showConfirm('Confirmar exclusão', 'Tem a certeza que deseja apagar este projeto?', () => {
+                    target.closest('.project-item').style.opacity = '0.5';
+                    fetch(`/api/projects/${target.dataset.projectId}`, { method: 'DELETE' }).then(() => renderProjectsPage());
+                });
             }
             if (action === 'edit-project') {
                 const projectId = target.dataset.projectId;
@@ -531,7 +593,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 openSpecEditorModal(spec);
             }
             if (action === 'delete-spec') {
-                if (confirm('Tem a certeza?')) { target.closest('.spec-item').style.opacity = '0.5'; await fetch(`/api/specs/${target.dataset.specId}`, { method: 'DELETE' }); renderApiSpecsPage(); }
+                showConfirm('Confirmar exclusão', 'Tem a certeza que deseja apagar este ficheiro YAML?', () => {
+                    target.closest('.spec-item').style.opacity = '0.5';
+                    fetch(`/api/specs/${target.dataset.specId}`, { method: 'DELETE' }).then(() => renderApiSpecsPage());
+                });
             }
             if (action === 'back-to-projects') { navigate('projects'); }
             if (action === 'show-add-version-form') { document.getElementById('add-version-form').classList.remove('hidden'); }
@@ -543,7 +608,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 else { enableButton(); }
             }
             if (action === 'delete-version') {
-                if (confirm('Tem a certeza?')) { target.closest('.version-item').style.opacity = '0.5'; await fetch(`/api/versions/${target.dataset.versionId}`, { method: 'DELETE' }); renderManageVersionsPage(); }
+                showConfirm('Confirmar exclusão', 'Tem a certeza que deseja apagar esta versão?', () => {
+                    target.closest('.version-item').style.opacity = '0.5';
+                    fetch(`/api/versions/${target.dataset.versionId}`, { method: 'DELETE' }).then(() => renderManageVersionsPage());
+                });
             }
             if (action === 'manage-associations') {
                 navigate('manage_associations', { version: { id: target.dataset.versionId, name: target.dataset.versionName } });
@@ -589,7 +657,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         projectId: state.currentProject.id 
                     }) 
                 });
-                alert('Associações salvas com sucesso!');
+                showToast('Associações salvas com sucesso!', 'success');
                 navigate('manage_versions', { project: state.currentProject });
             }
         });
