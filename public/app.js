@@ -205,6 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const renderProjectsPage = async () => {
+            updateActiveNavigation('projects');
             pageContainer.innerHTML = `
                 <div class="page-header">
                     <h2 class="text-2xl font-bold">Projetos</h2>
@@ -236,6 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const renderApiSpecsPage = async () => {
+            updateActiveNavigation('api_specs');
             pageContainer.innerHTML = `
                 <div class="page-header">
                     <h2 class="text-2xl font-bold">Repositório de Ficheiros YAML</h2>
