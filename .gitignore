@@ -114,7 +114,6 @@ ehthumbs.db
 Thumbs.db
 
 # Docker
-Dockerfile
 docker-compose.yml
 .dockerignore
 
