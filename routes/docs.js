@@ -56,11 +56,6 @@ router.get('/:projectSlug', async (req, res) => {
             replacements: { codModulo: project.COD_MODULO }
         });
         
-        console.log('Project:', project);
-        console.log('Buscando versões para cod_modulo:', project.COD_MODULO);
-        console.log('Versions found:', versions);
-        console.log('Versions count:', versions.length);
-        
         // Debug: verificar se existem dados na tabela v$cliente_modulo_versao
         const [debugVersions] = await sequelize.query(`
             SELECT cod_modulo, versao, COUNT(*) as count
@@ -70,7 +65,6 @@ router.get('/:projectSlug', async (req, res) => {
         `, {
             replacements: { codModulo: project.COD_MODULO }
         });
-        console.log('Debug - dados brutos da tabela v$cliente_modulo_versao:', debugVersions);
         
         // Se não há versões, mostrar mensagem apropriada
         if (versions.length === 0) {
@@ -123,31 +117,21 @@ router.get('/:projectSlug', async (req, res) => {
                 <div id="swagger-ui"></div>
                 <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js" charset="UTF-8"></script>
                 <script>
-                    console.log('Script carregado - versões disponíveis: ${versions.length}');
                     const selector = document.getElementById('version-selector');
                     let ui;
                     
-                    console.log('Selector encontrado:', selector);
-                    console.log('Opções no selector:', selector.options.length);
-                    
                     selector.addEventListener('change', (event) => {
-                        console.log('Dropdown mudou! Valor selecionado:', event.target.value);
                         const versionId = event.target.value;
                         if (versionId) {
                             // CORREÇÃO: A URL agora inclui o projectSlug
                             const specUrl = '/docs/' + window.location.pathname.split('/')[2] + '/versions/' + versionId;
-                            console.log('URL da spec:', specUrl);
                             
                             // Testar a URL primeiro
                             fetch(specUrl)
                                 .then(response => {
-                                    console.log('Response status:', response.status);
                                     return response.json();
                                 })
                                 .then(data => {
-                                    console.log('Dados recebidos:', data);
-                                    console.log('Paths encontrados:', Object.keys(data.paths || {}));
-                                    
                                     if (ui) {
                                         ui.specActions.updateUrl(specUrl);
                                         ui.specActions.download();
@@ -178,8 +162,6 @@ router.get('/:projectSlug/versions/:versionId', async (req, res) => {
     try {
         const { projectSlug, versionId } = req.params;
         
-        console.log('Buscando versão com ID:', versionId, 'para projeto:', projectSlug);
-        
         // Buscar projeto primeiro
         const [projects] = await sequelize.query(`
             SELECT modulo_id as "id", cod_modulo, nome as "name", 
@@ -208,11 +190,7 @@ router.get('/:projectSlug/versions/:versionId', async (req, res) => {
             replacements: { codModulo: project.COD_MODULO }
         });
         
-        console.log('Versões do projeto', project.COD_MODULO, ':', projectVersions.length);
-        console.log('Versões:', projectVersions);
-        
         const version = projectVersions.find(v => v.id == versionId);
-        console.log('Versão selecionada:', version);
         
         if(!version) return res.status(404).json({error: 'Versão não encontrada.'});
 
@@ -236,14 +214,6 @@ router.get('/:projectSlug/versions/:versionId', async (req, res) => {
             AND va.VERSAO = '${version.name}'
             AND va.CLIENTE_ID = 1
         `);
-        
-        console.log('Associações encontradas para', version.cod_modulo, 'versão', version.name, ':', associations.length);
-        console.log('Detalhes das associações:', associations.map(a => ({
-            ApiSpecId: a.ApiSpecId,
-            path: a.endpointPath,
-            method: a.endpointMethod,
-            hasYaml: !!a.yaml
-        })));
 
         if (associations.length === 0) {
             return res.json({ openapi: '3.0.0', info: { title: `${projectName} - ${version.name}`, description: 'Nenhum endpoint associado a esta versão.', version: version.name }, paths: {} });

@@ -113,7 +113,6 @@ router.get('/specs/:id', async (req, res) => {
 
 router.post('/specs', async (req, res) => {
     try {
-        console.log('Tentando inserir spec:', { name: req.body.name, yamlLength: req.body.yaml?.length });
         
         // Usar conexão Oracle direta para CLOB sem truncar
         const connection = await sequelize.connectionManager.getConnection();
@@ -130,7 +129,6 @@ router.post('/specs', async (req, res) => {
         );
         
         const insertedId = result.outBinds.id[0];
-        console.log('Inserido com ID:', insertedId, 'tamanho original:', req.body.yaml?.length);
         
         res.status(201).json({
             id: insertedId,
@@ -236,8 +234,6 @@ router.get('/projects/:projectId/versions', async (req, res) => {
         
         const codModulo = projectData[0].COD_MODULO;
         
-        console.log('Buscando versões para cod_modulo:', codModulo);
-        
         // Buscar versões distintas para este cod_modulo com contador real de endpoints
         const [versions] = await sequelize.query(`
             SELECT 
@@ -264,7 +260,6 @@ router.get('/projects/:projectId/versions', async (req, res) => {
             replacements: { codModulo }
         });
         
-        console.log('Versões encontradas:', versions.length, versions);
         
         res.json(versions);
     } catch (error) {
@@ -298,10 +293,7 @@ router.get('/versions/:versionId/associations', async(req, res) => {
         const versionId = req.params.versionId;
         const projectId = req.query.projectId;
         
-        console.log('GET associations - versionId:', versionId, 'projectId:', projectId);
-        
         if (!projectId) {
-            console.log('ProjectId não fornecido');
             return res.json([]);
         }
         
@@ -313,12 +305,10 @@ router.get('/versions/:versionId/associations', async(req, res) => {
         });
         
         if (projectData.length === 0) {
-            console.log('Projeto não encontrado');
             return res.json([]);
         }
         
         const codModulo = projectData[0].COD_MODULO;
-        console.log('Cod_modulo do projeto:', codModulo);
 
         // Buscar versões específicas deste projeto
         const [projectVersions] = await sequelize.query(`
@@ -336,10 +326,7 @@ router.get('/versions/:versionId/associations', async(req, res) => {
             replacements: { codModulo }
         });
         
-        console.log('Versões do projeto encontradas:', projectVersions);
-        
         const version = projectVersions.find(v => v.id == versionId);
-        console.log('Versão selecionada:', version);
         
         if (!version) {
             return res.json([]);
@@ -360,7 +347,6 @@ router.get('/versions/:versionId/associations', async(req, res) => {
             }
         });
         
-        console.log('Associações encontradas:', associations);
         res.json(associations);
     } catch(error) {
         console.error('Erro na API associations:', error);
@@ -372,9 +358,6 @@ router.post('/versions/:versionId/associations', async(req, res) => {
     try {
         const { associations, projectId } = req.body;
         const versionId = req.params.versionId;
-
-        console.log('POST associations - versionId:', versionId, 'projectId:', projectId);
-        console.log('POST associations - associations:', associations);
 
         // Buscar cod_modulo do projeto
         const [projectData] = await sequelize.query(`
@@ -388,7 +371,6 @@ router.post('/versions/:versionId/associations', async(req, res) => {
         }
         
         const codModulo = projectData[0].COD_MODULO;
-        console.log('Cod_modulo do projeto:', codModulo);
 
         // Buscar versões específicas deste projeto
         const [projectVersions] = await sequelize.query(`
@@ -406,10 +388,7 @@ router.post('/versions/:versionId/associations', async(req, res) => {
             replacements: { codModulo }
         });
         
-        console.log('Versões do projeto encontradas:', projectVersions);
-        
         const version = projectVersions.find(v => v.id == versionId);
-        console.log('Versão selecionada:', version);
         
         if (!version) {
             return res.status(404).json({ error: 'Versão não encontrada.' });

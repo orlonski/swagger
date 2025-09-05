@@ -19,21 +19,63 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Verificação de Autenticação e Ponto de Entrada ---
     async function checkAuthAndInitialize() {
+        // Esconder header durante verificação
+        const header = document.querySelector('header');
+        header.style.display = 'none';
+        
+        // Tela de loading completa
+        document.body.innerHTML = `
+            <div class="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-100 flex items-center justify-center">
+                <div class="text-center">
+                    <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mx-auto mb-6"></div>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Hub de Documentação</h2>
+                    <p class="text-gray-600 font-medium">Verificando autenticação...</p>
+                </div>
+            </div>
+        `;
+        
         try {
             const response = await fetch('/api/auth/status');
             if (!response.ok) throw new Error('Falha na verificação de estado.');
             
             const data = await response.json();
             if (!data.isAuthenticated) {
-                window.location.href = '/login.html';
+                // Transição suave para login
+                document.body.innerHTML = `
+                    <div class="min-h-screen bg-gradient-to-br from-red-50 to-pink-100 flex items-center justify-center">
+                        <div class="text-center">
+                            <div class="animate-pulse">
+                                <div class="h-16 w-16 bg-indigo-300 rounded-full mx-auto mb-6"></div>
+                            </div>
+                            <h2 class="text-2xl font-bold text-gray-800 mb-2">Redirecionando...</h2>
+                            <p class="text-gray-600 font-medium">Acesso não autorizado</p>
+                        </div>
+                    </div>
+                `;
+                setTimeout(() => {
+                    window.location.href = '/login.html';
+                }, 800);
             } else {
-                state.user = data.user;
-                userMenu.textContent = `Olá, ${state.user.username}`;
-                initializeMainApp();
+                // Restaurar página original e inicializar
+                location.reload(); // Recarrega para restaurar HTML original
             }
         } catch (error) {
             console.error("Erro de autenticação, a redirecionar para o login:", error);
-            window.location.href = '/login.html';
+            // Transição suave mesmo em caso de erro
+            document.body.innerHTML = `
+                <div class="min-h-screen bg-gradient-to-br from-red-50 to-orange-100 flex items-center justify-center">
+                    <div class="text-center">
+                        <div class="animate-pulse">
+                            <div class="h-16 w-16 bg-red-300 rounded-full mx-auto mb-6"></div>
+                        </div>
+                        <h2 class="text-2xl font-bold text-gray-800 mb-2">Erro de Conexão</h2>
+                        <p class="text-gray-600 font-medium">Redirecionando para login...</p>
+                    </div>
+                </div>
+            `;
+            setTimeout(() => {
+                window.location.href = '/login.html';
+            }, 1000);
         }
     }
 
@@ -438,17 +480,12 @@ document.addEventListener('DOMContentLoaded', () => {
         async function loadDataForAssociationPage() {
             const specsListContainer = document.getElementById('assoc-specs-list');
             specsListContainer.innerHTML = getLoadingIndicator();
-            console.log('Carregando associações para:', {
-                versionId: state.currentVersion.id,
-                projectId: state.currentProject.id
-            });
             const [specsRes, assocRes] = await Promise.all([ 
                 fetch('/api/specs'), 
                 fetch(`/api/versions/${state.currentVersion.id}/associations?projectId=${state.currentProject.id}`) 
             ]);
             const specs = await specsRes.json();
             const associations = await assocRes.json();
-            console.log('Associações carregadas:', associations);
             state.pendingAssociations = new Set(associations.map(a => `${a.ApiSpecId}:${a.endpointPath}:${a.endpointMethod}`));
             
             if (specs.length === 0) {
@@ -644,11 +681,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const [apiSpecId, endpointPath, endpointMethod] = id.split(':', 3);
                     return { apiSpecId, endpointPath, endpointMethod };
                 });
-                console.log('Frontend enviando:', {
-                    versionId: state.currentVersion.id,
-                    projectId: state.currentProject.id,
-                    associations: associations
-                });
                 await fetch(`/api/versions/${state.currentVersion.id}/associations`, { 
                     method: 'POST', 
                     headers: { 'Content-Type': 'application/json' }, 
@@ -665,6 +697,23 @@ document.addEventListener('DOMContentLoaded', () => {
         navigate('projects');
     }
 
-    checkAuthAndInitialize();
+    // Verificar se já está autenticado primeiro
+    fetch('/api/auth/status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.isAuthenticated) {
+                // Usuário já autenticado, inicializar app normalmente
+                state.user = data.user;
+                userMenu.textContent = `Olá, ${state.user.username}`;
+                initializeMainApp();
+            } else {
+                // Não autenticado, mostrar loading e redirecionar
+                checkAuthAndInitialize();
+            }
+        })
+        .catch(() => {
+            // Erro na verificação, mostrar loading e redirecionar
+            checkAuthAndInitialize();
+        });
 });
 
