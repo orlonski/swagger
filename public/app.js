@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 `;
                 setTimeout(() => {
-                    window.location.href = '/login.html';
+                    window.location.href = '/login';
                 }, 800);
             } else {
                 // Restaurar página original e inicializar
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
             setTimeout(() => {
-                window.location.href = '/login.html';
+                window.location.href = '/login';
             }, 1000);
         }
     }
@@ -697,11 +697,34 @@ document.addEventListener('DOMContentLoaded', () => {
         navigate('projects');
     }
 
+    // Interceptar respostas 401 globalmente
+    const originalFetch = window.fetch;
+    window.fetch = function(...args) {
+        return originalFetch.apply(this, args)
+            .then(response => {
+                if (response.status === 401) {
+                    // Sessão expirada, redirecionar para login
+                    showToast('Sessão expirada. Redirecionando...', 'warning');
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 1500);
+                    throw new Error('Session expired');
+                }
+                return response;
+            });
+    };
+
     // Verificar se já está autenticado primeiro
     fetch('/api/auth/status')
-        .then(response => response.json())
+        .then(response => {
+            if (response.status === 401) {
+                checkAuthAndInitialize();
+                return;
+            }
+            return response.json();
+        })
         .then(data => {
-            if (data.isAuthenticated) {
+            if (data && data.isAuthenticated) {
                 // Usuário já autenticado, inicializar app normalmente
                 state.user = data.user;
                 userMenu.textContent = `Olá, ${state.user.username}`;
@@ -711,9 +734,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 checkAuthAndInitialize();
             }
         })
-        .catch(() => {
-            // Erro na verificação, mostrar loading e redirecionar
-            checkAuthAndInitialize();
+        .catch((error) => {
+            if (error.message !== 'Session expired') {
+                // Erro na verificação, mostrar loading e redirecionar
+                checkAuthAndInitialize();
+            }
         });
 });
 

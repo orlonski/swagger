@@ -60,15 +60,40 @@ passport.use('custom', new CustomStrategy(
 passport.serializeUser((user, done) => { done(null, user); });
 passport.deserializeUser((user, done) => { done(null, user); });
 
-// --- Middleware de Proteção ---
+// --- Middleware de Proteção Robusto ---
 function isAuthenticated(req, res, next) {
     if (req.isAuthenticated()) {
         return next();
     }
-    if (req.headers['accept'] && req.headers['accept'].includes('application/json')) {
-        return res.status(401).json({ error: 'Não autorizado. Por favor, faça o login novamente.' });
+    
+    // Para requisições AJAX/API
+    if (req.xhr || req.headers['accept']?.includes('application/json') || req.path.startsWith('/api/')) {
+        return res.status(401).json({ 
+            error: 'Sessão expirada ou não autorizado', 
+            code: 'UNAUTHORIZED',
+            redirect: '/login'
+        });
     }
-    res.redirect('/login.html');
+    
+    // Para requisições de página
+    res.redirect('/login');
+}
+
+// Middleware para validar token se presente
+function validateToken(req, res, next) {
+    if (req.isAuthenticated() && req.user?.token) {
+        // TODO: Implementar validação do token com API externa se necessário
+        return next();
+    }
+    return isAuthenticated(req, res, next);
+}
+
+// Middleware para logging de acesso
+function logAccess(req, res, next) {
+    const timestamp = new Date().toISOString();
+    const user = req.user?.username || 'anonymous';
+    console.log(`[${timestamp}] ${req.method} ${req.path} - User: ${user}`);
+    next();
 }
 
 // --- Definição das Rotas ---
@@ -76,16 +101,69 @@ const authRoutes = require('./routes/auth');
 const apiRoutes = require('./routes/api');
 const docsRoutes = require('./routes/docs');
 
+// Middleware global de logging
+app.use(logAccess);
+
 // Rotas Públicas (disponíveis antes do login)
-app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api/auth', authRoutes);
 app.use('/docs', docsRoutes);
 
-// Rotas Protegidas (disponíveis apenas após o login)
-app.get('/', isAuthenticated, (req, res) => {
+// Rotas de login com URL limpa
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+app.get('/login.js', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.js'));
+});
+
+// Proteção da página principal
+app.get('/', validateToken, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
-app.use('/api', isAuthenticated, apiRoutes);
+
+// Proteção de arquivos estáticos sensíveis
+app.get('/app.js', validateToken, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'app.js'));
+});
+app.get('/index.html', validateToken, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Outros arquivos estáticos (CSS, imagens, etc.) - públicos
+app.use(express.static(path.join(__dirname, 'public'), {
+    index: false // Impede servir index.html automaticamente
+}));
+
+// Rotas de API protegidas
+app.use('/api', validateToken, apiRoutes);
+
+// Middleware de tratamento de erros
+app.use((err, req, res, next) => {
+    console.error(`[ERROR] ${new Date().toISOString()} - ${err.message}`);
+    console.error(err.stack);
+    
+    if (req.xhr || req.headers['accept']?.includes('application/json')) {
+        res.status(500).json({ 
+            error: 'Erro interno do servidor', 
+            code: 'INTERNAL_ERROR'
+        });
+    } else {
+        res.status(500).send('Erro interno do servidor');
+    }
+});
+
+// Middleware para rotas não encontradas
+app.use((req, res) => {
+    if (req.xhr || req.headers['accept']?.includes('application/json')) {
+        res.status(404).json({ 
+            error: 'Rota não encontrada', 
+            code: 'NOT_FOUND'
+        });
+    } else {
+        // Redirecionar para login em caso de rota não encontrada
+        res.redirect('/login');
+    }
+});
 
 // --- Arranque do Servidor ---
 sequelize.sync().then(() => {
