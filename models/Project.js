@@ -2,28 +2,34 @@ const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
     const Project = sequelize.define('Project', {
-        name: {
+        id: {
+            type: DataTypes.INTEGER,
+            primaryKey: true,
+            field: 'modulo_id'
+        },
+        cod_modulo: {
             type: DataTypes.STRING,
             allowNull: false,
             unique: true
         },
-        slug: {
+        name: {
             type: DataTypes.STRING,
             allowNull: false,
-            unique: true
+            field: 'nome'
+        },
+        descricao: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },
+        versao: {
+            type: DataTypes.STRING,
+            allowNull: true
         }
     }, {
-        hooks: {
-            beforeValidate: (project) => {
-                if (project.name) {
-                    project.slug = project.name
-                        .toLowerCase()
-                        .replace(/\s+/g, '-') // Substitui espaços por -
-                        .replace(/[^\w\-]+/g, '') // Remove caracteres inválidos
-                        .replace(/\-\-+/g, '-'); // Substitui múltiplos - por um único -
-                }
-            }
-        }
+        tableName: 'kmm.v$modulo',
+        timestamps: false,
+        freezeTableName: true,
+        quoteIdentifiers: false // Oracle não usa aspas duplas
     });
     return Project;
 };

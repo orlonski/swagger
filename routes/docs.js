@@ -1,6 +1,6 @@
 const express = require('express');
 const yaml = require('js-yaml');
-const { Project, ProjectVersion, VersionAssociation, ApiSpec } = require('../models');
+const { sequelize, Project, ProjectVersion, VersionAssociation, ApiSpec } = require('../models');
 const router = express.Router();
 
 // --- Funções Auxiliares ---
@@ -18,10 +18,85 @@ function findRefsRecursively(obj, refsSet) {
 // Rota principal que serve a página HTML da documentação
 router.get('/:projectSlug', async (req, res) => {
     try {
-        const project = await Project.findOne({ where: { slug: req.params.projectSlug } });
-        if (!project) return res.status(404).send('Projeto não encontrado.');
-
-        const versions = await ProjectVersion.findAll({ where: { ProjectId: project.id }, order: [['name', 'DESC']] });
+        // Buscar projeto usando Oracle
+        const [projects] = await sequelize.query(`
+            SELECT modulo_id as "id", cod_modulo, nome as "name", 
+                   NVL(LOWER(REPLACE(REPLACE(REGEXP_REPLACE(nome, '[^A-Za-z0-9 ]', ''), ' ', '-'), '--', '-')), 'projeto') as "slug"
+            FROM kmm.v$modulo 
+            WHERE NVL(LOWER(REPLACE(REPLACE(REGEXP_REPLACE(nome, '[^A-Za-z0-9 ]', ''), ' ', '-'), '--', '-')), 'projeto') = '${req.params.projectSlug}'
+        `);
+        
+        if (projects.length === 0) return res.status(404).send('Projeto não encontrado.');
+        
+        const project = projects[0];
+        
+        // Buscar versões usando Oracle - CORRIGIDO: usar replacements como na API
+        const [versions] = await sequelize.query(`
+            SELECT 
+                ROW_NUMBER() OVER (ORDER BY v.cod_modulo, v.versao ASC) as "id",
+                v.cod_modulo as "cod_modulo", 
+                v.versao as "name",
+                NVL(a.endpoint_count, 0) as "endpointCount"
+            FROM (
+                SELECT DISTINCT cod_modulo, versao 
+                FROM kmm.v$cliente_modulo_versao 
+                WHERE cod_modulo = :codModulo
+            ) v
+            LEFT JOIN (
+                SELECT 
+                    cod_modulo,
+                    versao,
+                    COUNT(*) as endpoint_count
+                FROM kmm.version_associations 
+                WHERE cliente_id = 1
+                GROUP BY cod_modulo, versao
+            ) a ON v.cod_modulo = a.cod_modulo AND v.versao = a.versao
+            ORDER BY v.cod_modulo, v.versao ASC
+        `, {
+            replacements: { codModulo: project.COD_MODULO }
+        });
+        
+        console.log('Project:', project);
+        console.log('Buscando versões para cod_modulo:', project.COD_MODULO);
+        console.log('Versions found:', versions);
+        console.log('Versions count:', versions.length);
+        
+        // Debug: verificar se existem dados na tabela v$cliente_modulo_versao
+        const [debugVersions] = await sequelize.query(`
+            SELECT cod_modulo, versao, COUNT(*) as count
+            FROM kmm.v$cliente_modulo_versao 
+            WHERE cod_modulo = :codModulo
+            GROUP BY cod_modulo, versao
+        `, {
+            replacements: { codModulo: project.COD_MODULO }
+        });
+        console.log('Debug - dados brutos da tabela v$cliente_modulo_versao:', debugVersions);
+        
+        // Se não há versões, mostrar mensagem apropriada
+        if (versions.length === 0) {
+            return res.send(`
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Documentação - ${project.name}</title>
+                    <style>
+                        body { font-family: sans-serif; padding: 20px; text-align: center; }
+                        .message { background: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px auto; max-width: 500px; }
+                    </style>
+                </head>
+                <body>
+                    <h1>${project.name}</h1>
+                    <div class="message">
+                        <h3>Nenhuma versão disponível</h3>
+                        <p>Este projeto ainda não possui versões configuradas.</p>
+                        <p><strong>Código do Módulo:</strong> ${project.COD_MODULO}</p>
+                        <p><a href="/app.html">← Voltar ao painel administrativo</a></p>
+                    </div>
+                </body>
+                </html>
+            `);
+        }
         
         res.send(`
             <!DOCTYPE html>
@@ -48,22 +123,44 @@ router.get('/:projectSlug', async (req, res) => {
                 <div id="swagger-ui"></div>
                 <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js" charset="UTF-8"></script>
                 <script>
+                    console.log('Script carregado - versões disponíveis: ${versions.length}');
                     const selector = document.getElementById('version-selector');
                     let ui;
+                    
+                    console.log('Selector encontrado:', selector);
+                    console.log('Opções no selector:', selector.options.length);
+                    
                     selector.addEventListener('change', (event) => {
+                        console.log('Dropdown mudou! Valor selecionado:', event.target.value);
                         const versionId = event.target.value;
                         if (versionId) {
-                            // CORREÇÃO: A URL agora aponta para o caminho público correto
-                            const specUrl = '/docs/versions/' + versionId;
-                            if (ui) {
-                                ui.specActions.updateUrl(specUrl);
-                                ui.specActions.download();
-                            } else {
-                                ui = SwaggerUIBundle({
-                                    url: specUrl,
-                                    dom_id: '#swagger-ui',
+                            // CORREÇÃO: A URL agora inclui o projectSlug
+                            const specUrl = '/docs/' + window.location.pathname.split('/')[2] + '/versions/' + versionId;
+                            console.log('URL da spec:', specUrl);
+                            
+                            // Testar a URL primeiro
+                            fetch(specUrl)
+                                .then(response => {
+                                    console.log('Response status:', response.status);
+                                    return response.json();
+                                })
+                                .then(data => {
+                                    console.log('Dados recebidos:', data);
+                                    console.log('Paths encontrados:', Object.keys(data.paths || {}));
+                                    
+                                    if (ui) {
+                                        ui.specActions.updateUrl(specUrl);
+                                        ui.specActions.download();
+                                    } else {
+                                        ui = SwaggerUIBundle({
+                                            url: specUrl,
+                                            dom_id: '#swagger-ui',
+                                        });
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Erro ao carregar spec:', error);
                                 });
-                            }
                         }
                     });
                 </script>
@@ -77,31 +174,92 @@ router.get('/:projectSlug', async (req, res) => {
 });
 
 // Rota PÚBLICA que gera o ficheiro OpenAPI "merged" para uma versão específica
-router.get('/versions/:versionId', async (req, res) => {
+router.get('/:projectSlug/versions/:versionId', async (req, res) => {
     try {
-        const version = await ProjectVersion.findByPk(req.params.versionId, { include: Project });
+        const { projectSlug, versionId } = req.params;
+        
+        console.log('Buscando versão com ID:', versionId, 'para projeto:', projectSlug);
+        
+        // Buscar projeto primeiro
+        const [projects] = await sequelize.query(`
+            SELECT modulo_id as "id", cod_modulo, nome as "name", 
+                   NVL(LOWER(REPLACE(REPLACE(REGEXP_REPLACE(nome, '[^A-Za-z0-9 ]', ''), ' ', '-'), '--', '-')), 'projeto') as "slug"
+            FROM kmm.v$modulo 
+            WHERE NVL(LOWER(REPLACE(REPLACE(REGEXP_REPLACE(nome, '[^A-Za-z0-9 ]', ''), ' ', '-'), '--', '-')), 'projeto') = '${projectSlug}'
+        `);
+        
+        if (projects.length === 0) return res.status(404).json({error: 'Projeto não encontrado.'});
+        
+        const project = projects[0];
+        
+        // Buscar versões apenas deste projeto
+        const [projectVersions] = await sequelize.query(`
+            SELECT 
+                ROW_NUMBER() OVER (ORDER BY v.versao ASC) as "id",
+                v.cod_modulo as "cod_modulo", 
+                v.versao as "name"
+            FROM (
+                SELECT DISTINCT cod_modulo, versao 
+                FROM kmm.v$cliente_modulo_versao
+                WHERE cod_modulo = :codModulo
+            ) v
+            ORDER BY v.versao ASC
+        `, {
+            replacements: { codModulo: project.COD_MODULO }
+        });
+        
+        console.log('Versões do projeto', project.COD_MODULO, ':', projectVersions.length);
+        console.log('Versões:', projectVersions);
+        
+        const version = projectVersions.find(v => v.id == versionId);
+        console.log('Versão selecionada:', version);
+        
         if(!version) return res.status(404).json({error: 'Versão não encontrada.'});
 
-        const associations = await VersionAssociation.findAll({
-            where: { ProjectVersionId: req.params.versionId },
-            include: ApiSpec
-        });
+        // Buscar projeto para o nome
+        const [projectData] = await sequelize.query(`
+            SELECT nome as "name" FROM kmm.v$modulo WHERE cod_modulo = '${version.cod_modulo}'
+        `);
+        
+        const projectName = projectData.length > 0 ? projectData[0].name : 'Projeto';
+
+        // Buscar associações usando Oracle - CORRIGIDO: incluir filtro por versão
+        const [associations] = await sequelize.query(`
+            SELECT 
+                va.API_SPEC_ID as "ApiSpecId",
+                va.ENDPOINT_PATH as "endpointPath",
+                va.ENDPOINT_METHOD as "endpointMethod",
+                asp.yaml as "yaml"
+            FROM kmm.version_associations va
+            LEFT JOIN kmm.api_specs asp ON va.API_SPEC_ID = asp.id
+            WHERE va.COD_MODULO = '${version.cod_modulo}' 
+            AND va.VERSAO = '${version.name}'
+            AND va.CLIENTE_ID = 1
+        `);
+        
+        console.log('Associações encontradas para', version.cod_modulo, 'versão', version.name, ':', associations.length);
+        console.log('Detalhes das associações:', associations.map(a => ({
+            ApiSpecId: a.ApiSpecId,
+            path: a.endpointPath,
+            method: a.endpointMethod,
+            hasYaml: !!a.yaml
+        })));
 
         if (associations.length === 0) {
-            return res.json({ openapi: '3.0.0', info: { title: `${version.Project.name} - ${version.name}`, description: 'Nenhum endpoint associado a esta versão.', version: version.name }, paths: {} });
+            return res.json({ openapi: '3.0.0', info: { title: `${projectName} - ${version.name}`, description: 'Nenhum endpoint associado a esta versão.', version: version.name }, paths: {} });
         }
 
         const sourceDocs = new Map();
         associations.forEach(assoc => {
-            if (assoc.ApiSpec && assoc.ApiSpec.yaml && !sourceDocs.has(assoc.ApiSpec.id)) {
-                sourceDocs.set(assoc.ApiSpec.id, yaml.load(assoc.ApiSpec.yaml));
+            if (assoc.yaml && !sourceDocs.has(assoc.ApiSpecId)) {
+                sourceDocs.set(assoc.ApiSpecId, yaml.load(assoc.yaml));
             }
         });
 
         const mergedSpec = {
             openapi: '3.0.0',
             info: {
-                title: `${version.Project.name} - ${version.name}`,
+                title: `${projectName} - ${version.name}`,
                 version: version.name,
                 description: 'Documentação consolidada gerada pelo Hub de APIs.'
             },
@@ -114,7 +272,7 @@ router.get('/versions/:versionId', async (req, res) => {
         const allRefs = new Set();
 
         for (const assoc of associations) {
-            const doc = sourceDocs.get(assoc.ApiSpec.id);
+            const doc = sourceDocs.get(assoc.ApiSpecId);
             if (!doc) continue;
             const endpointData = doc.paths?.[assoc.endpointPath]?.[assoc.endpointMethod];
             if (endpointData) {
@@ -177,4 +335,3 @@ router.get('/versions/:versionId', async (req, res) => {
 });
 
 module.exports = router;
-

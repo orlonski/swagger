@@ -4,7 +4,6 @@ const path = require('path');
 const session = require('express-session');
 const passport = require('passport');
 const CustomStrategy = require('passport-custom').Strategy;
-const PgStore = require('connect-pg-simple')(session);
 const fetch = require('node-fetch');
 const { sequelize } = require('./models');
 
@@ -15,12 +14,8 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// --- Configuração da Sessão ---
+// --- Configuração da Sessão (sem PostgreSQL) ---
 app.use(session({
-  store: new PgStore({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: true,
-  }),
   secret: process.env.SESSION_SECRET || 'fallback_secret_change_this_in_production',
   resave: false,
   saveUninitialized: false,
